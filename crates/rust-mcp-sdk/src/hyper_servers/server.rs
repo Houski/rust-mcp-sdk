@@ -2,6 +2,7 @@ use crate::mcp_traits::mcp_handler::McpServerHandler;
 #[cfg(feature = "ssl")]
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
+use http::Method;
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     path::Path,
@@ -9,6 +10,7 @@ use std::{
     time::Duration,
 };
 use tokio::signal;
+use tower_http::cors::{Any, CorsLayer};
 
 use super::{
     app_state::AppState,
@@ -27,6 +29,48 @@ const GRACEFUL_SHUTDOWN_TMEOUT_SECS: u64 = 30;
 const DEFAULT_SSE_ENDPOINT: &str = "/sse";
 // Default MCP Messages endpoint path
 const DEFAULT_MESSAGES_ENDPOINT: &str = "/messages";
+
+/// CORS configuration options
+#[derive(Debug, Clone)]
+pub struct CorsOptions {
+    /// List of allowed origins. Use vec!["*".to_string()] for all origins
+    pub allowed_origins: Vec<String>,
+    /// List of allowed methods
+    pub allowed_methods: Vec<Method>,
+    /// List of allowed headers
+    pub allowed_headers: Vec<String>,
+    /// Whether to allow credentials
+    pub allow_credentials: bool,
+    /// Max age for preflight requests in seconds
+    pub max_age: Option<Duration>,
+}
+
+impl Default for CorsOptions {
+    fn default() -> Self {
+        Self {
+            allowed_origins: vec!["*".to_string()],
+            allowed_methods: vec![
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+                Method::HEAD,
+                Method::PATCH,
+            ],
+            allowed_headers: vec![
+                "content-type".to_string(),
+                "authorization".to_string(),
+                "accept".to_string(),
+                "origin".to_string(),
+                "x-requested-with".to_string(),
+                "cache-control".to_string(),
+            ],
+            allow_credentials: true,
+            max_age: Some(Duration::from_secs(3600)), // 1 hour
+        }
+    }
+}
 
 /// Configuration struct for the Hyper server
 /// Used to configure the HyperServer instance.
@@ -53,6 +97,8 @@ pub struct HyperServerOptions {
     pub transport_options: Arc<TransportOptions>,
     /// Optional thread-safe session id generator to generate unique session IDs.
     pub session_id_generator: Option<Arc<dyn IdGenerator>>,
+    /// CORS configuration options
+    pub cors_options: Option<CorsOptions>,
 }
 
 impl HyperServerOptions {
@@ -134,6 +180,51 @@ impl HyperServerOptions {
             .as_deref()
             .unwrap_or(DEFAULT_MESSAGES_ENDPOINT)
     }
+
+    /// Creates a CORS layer based on the configuration
+    pub fn create_cors_layer(&self) -> Option<CorsLayer> {
+        self.cors_options.as_ref().map(|cors_opts| {
+            let mut cors = CorsLayer::new();
+
+            // Set allowed origins
+            if cors_opts.allowed_origins.contains(&"*".to_string()) {
+                cors = cors.allow_origin(Any);
+            } else {
+                for origin in &cors_opts.allowed_origins {
+                    if let Ok(origin_header) = origin.parse() {
+                        cors = cors.allow_origin(origin_header);
+                    }
+                }
+            }
+
+            // Set allowed methods
+            cors = cors.allow_methods(cors_opts.allowed_methods.clone());
+
+            // Set allowed headers
+            if cors_opts.allowed_headers.contains(&"*".to_string()) {
+                cors = cors.allow_headers(Any);
+            } else {
+                let headers: Vec<_> = cors_opts
+                    .allowed_headers
+                    .iter()
+                    .filter_map(|h| h.parse().ok())
+                    .collect();
+                cors = cors.allow_headers(headers);
+            }
+
+            // Set credentials
+            if cors_opts.allow_credentials {
+                cors = cors.allow_credentials(true);
+            }
+
+            // Set max age
+            if let Some(max_age) = cors_opts.max_age {
+                cors = cors.max_age(max_age);
+            }
+
+            cors
+        })
+    }
 }
 
 /// Default implementation for HyperServerOptions
@@ -153,6 +244,7 @@ impl Default for HyperServerOptions {
             ssl_cert_path: None,
             ssl_key_path: None,
             session_id_generator: None,
+            cors_options: None,
         }
     }
 }
@@ -194,7 +286,15 @@ impl HyperServer {
             sse_message_endpoint: server_options.sse_messages_endpoint().to_owned(),
             transport_options: Arc::clone(&server_options.transport_options),
         });
-        let app = app_routes(Arc::clone(&state), &server_options);
+
+        let mut app = app_routes(Arc::clone(&state), &server_options);
+
+        // Add CORS layer if configured
+        if let Some(cors_layer) = server_options.create_cors_layer() {
+            app = app.layer(cors_layer);
+            tracing::info!("CORS support enabled");
+        }
+
         Self {
             app,
             state,
@@ -246,25 +346,23 @@ impl HyperServer {
             "http"
         };
 
+        let cors_info = if self.options.cors_options.is_some() {
+            " (CORS enabled)"
+        } else {
+            ""
+        };
+
         let server_url = format!(
-            "{} is available at {}://{}{}",
+            "{} is available at {}://{}{}{}",
             server_type,
             protocol,
             addr,
-            self.options.sse_endpoint()
+            self.options.sse_endpoint(),
+            cors_info
         );
 
         Ok(server_url)
     }
-
-    // pub fn with_layer<L>(mut self, layer: L) -> Self
-    // where
-    //     // L: Layer<axum::body::Body> + Clone + Send + Sync + 'static,
-    //     L::Service: Send + Sync + 'static,
-    // {
-    //     self.router = self.router.layer(layer);
-    //     self
-    // }
 
     /// Starts the server with SSL support (available when "ssl" feature is enabled)
     ///
