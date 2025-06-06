@@ -181,8 +181,7 @@ impl HyperServerOptions {
             .unwrap_or(DEFAULT_MESSAGES_ENDPOINT)
     }
 
-    /// Creates a CORS layer based on the configuration
-    pub fn create_cors_layer(&self) -> Option<CorsLayer> {
+  pub fn create_cors_layer(&self) -> Option<CorsLayer> {
         self.cors_options.as_ref().map(|cors_opts| {
             let mut cors = CorsLayer::new();
 
@@ -191,7 +190,8 @@ impl HyperServerOptions {
                 cors = cors.allow_origin(Any);
             } else {
                 for origin in &cors_opts.allowed_origins {
-                    if let Ok(origin_header) = origin.parse::<F>() {
+                    // Fix: Use HeaderValue instead of undefined type F
+                    if let Ok(origin_header) = origin.parse::<HeaderValue>() {
                         cors = cors.allow_origin(origin_header);
                     }
                 }
@@ -204,7 +204,7 @@ impl HyperServerOptions {
             if cors_opts.allowed_headers.contains(&"*".to_string()) {
                 cors = cors.allow_headers(Any);
             } else {
-                let headers: Vec<_> = cors_opts
+                let headers: Vec<HeaderValue> = cors_opts
                     .allowed_headers
                     .iter()
                     .filter_map(|h| h.parse().ok())
@@ -225,7 +225,6 @@ impl HyperServerOptions {
             cors
         })
     }
-}
 
 /// Default implementation for HyperServerOptions
 ///
