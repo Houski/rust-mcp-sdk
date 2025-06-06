@@ -191,7 +191,7 @@ impl HyperServerOptions {
                 cors = cors.allow_origin(Any);
             } else {
                 for origin in &cors_opts.allowed_origins {
-                    if let Ok(origin_header) = origin.parse() {
+                    if let Ok(origin_header) = origin.parse::<F>() {
                         cors = cors.allow_origin(origin_header);
                     }
                 }
