@@ -67,7 +67,7 @@ impl Default for CorsOptions {
                 "x-requested-with".to_string(),
                 "cache-control".to_string(),
             ],
-            allow_credentials: true,
+            allow_credentials: false,
             max_age: Some(Duration::from_secs(3600)), // 1 hour
         }
     }
