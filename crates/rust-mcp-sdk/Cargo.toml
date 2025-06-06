@@ -26,6 +26,7 @@ axum = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["v4"], optional = true }
 tokio-stream = { workspace = true, optional = true }
 axum-server = { version = "0.7", features = [], optional = true }
+tower-http = { version = "0.5", features = ["cors"], optional = true }
 tracing.workspace = true
 
 # rustls = { workspace = true, optional = true }
@@ -53,6 +54,7 @@ client = ["rust-mcp-transport/stdio", "rust-mcp-transport/sse"] # Client feature
 hyper-server = [
     "axum",
     "axum-server",
+    "tower-http",
     "uuid",
     "tokio-stream",
     "rust-mcp-transport/sse",
