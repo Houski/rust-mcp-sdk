@@ -2,6 +2,7 @@ use crate::mcp_traits::mcp_handler::McpServerHandler;
 #[cfg(feature = "ssl")]
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
+use hyper::header::HeaderValue;
 use hyper::http::Method;
 use std::{
     net::{SocketAddr, ToSocketAddrs},
