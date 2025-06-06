@@ -225,6 +225,7 @@ pub fn create_cors_layer(&self) -> Option<CorsLayer> {
         cors
     })
 }
+}
 
 /// Default implementation for HyperServerOptions
 ///
