@@ -225,6 +225,7 @@ impl HyperServerOptions {
             cors
         })
     }
+}
 
 /// Default implementation for HyperServerOptions
 ///
