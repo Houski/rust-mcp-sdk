@@ -182,50 +182,48 @@ impl HyperServerOptions {
             .unwrap_or(DEFAULT_MESSAGES_ENDPOINT)
     }
 
-  pub fn create_cors_layer(&self) -> Option<CorsLayer> {
-        self.cors_options.as_ref().map(|cors_opts| {
-            let mut cors = CorsLayer::new();
+pub fn create_cors_layer(&self) -> Option<CorsLayer> {
+    self.cors_options.as_ref().map(|cors_opts| {
+        let mut cors = CorsLayer::new();
 
-            // Set allowed origins
-            if cors_opts.allowed_origins.contains(&"*".to_string()) {
-                cors = cors.allow_origin(Any);
-            } else {
-                for origin in &cors_opts.allowed_origins {
-                    // Fix: Use HeaderValue instead of undefined type F
-                    if let Ok(origin_header) = origin.parse::<HeaderValue>() {
-                        cors = cors.allow_origin(origin_header);
-                    }
+        // Set allowed origins
+        if cors_opts.allowed_origins.contains(&"*".to_string()) {
+            cors = cors.allow_origin(Any);
+        } else {
+            for origin in &cors_opts.allowed_origins {
+                if let Ok(origin_header) = origin.parse::<HeaderValue>() {
+                    cors = cors.allow_origin(origin_header);
                 }
             }
+        }
 
-            // Set allowed methods
-            cors = cors.allow_methods(cors_opts.allowed_methods.clone());
+        // Set allowed methods
+        cors = cors.allow_methods(cors_opts.allowed_methods.clone());
 
-            // Set allowed headers
-            if cors_opts.allowed_headers.contains(&"*".to_string()) {
-                cors = cors.allow_headers(Any);
-            } else {
-                let headers: Vec<HeaderValue> = cors_opts
-                    .allowed_headers
-                    .iter()
-                    .filter_map(|h| h.parse().ok())
-                    .collect();
-                cors = cors.allow_headers(headers);
-            }
+        // Set allowed headers - FIX: Use HeaderName instead of HeaderValue
+        if cors_opts.allowed_headers.contains(&"*".to_string()) {
+            cors = cors.allow_headers(Any);
+        } else {
+            let headers: Vec<hyper::header::HeaderName> = cors_opts
+                .allowed_headers
+                .iter()
+                .filter_map(|h| h.parse().ok()) // This will now parse to HeaderName
+                .collect();
+            cors = cors.allow_headers(headers);
+        }
 
-            // Set credentials
-            if cors_opts.allow_credentials {
-                cors = cors.allow_credentials(true);
-            }
+        // Set credentials
+        if cors_opts.allow_credentials {
+            cors = cors.allow_credentials(true);
+        }
 
-            // Set max age
-            if let Some(max_age) = cors_opts.max_age {
-                cors = cors.max_age(max_age);
-            }
+        // Set max age
+        if let Some(max_age) = cors_opts.max_age {
+            cors = cors.max_age(max_age);
+        }
 
-            cors
-        })
-    }
+        cors
+    })
 }
 
 /// Default implementation for HyperServerOptions
